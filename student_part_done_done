@@ -1,0 +1,655 @@
+# Importing essential modules
+from PyQt6 import QtWidgets, uic
+import mysql.connector
+from mysql.connector import Error
+from PyQt6.QtCore import QDate
+from PyQt6.QtWidgets import QApplication, QMainWindow, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QHeaderView
+import sys
+import pyodbc
+from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QPushButton, QLabel, QFileDialog, QLineEdit, QWidget
+import sys
+import pyodbc
+import os
+
+
+server = 'DESKTOP-42MV8LH\SPARTA'
+database = 'project'  # Name of your Northwind database
+use_windows_authentication = True  # Set to True to use Windows Authentication
+username = 'sa'  # Specify a username if not using Windows Authentication
+password = '123'  # Specify a password if not using Windows Authentication
+
+# Create the connection string based on the authentication method chosen
+if use_windows_authentication:
+    connection_string = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server};DATABASE={database};Trusted_Connection=yes;'
+else:
+    connection_string = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server};DATABASE={database};UID={username};PWD={password}'
+
+
+
+class profilee(QtWidgets.QMainWindow):
+    def __init__(self, student, parent=None):
+        super(profilee, self).__init__(parent)
+        uic.loadUi('student_details.ui', self)  # Load your logged-in UI file
+        print("Student ID IS THIS:    ", student)
+        self.connection = pyodbc.connect(connection_string)
+        self.db_cursor = self.connection.cursor()
+        self.student = student
+
+        # Connect the update button click event to the update_profile method
+        self.pushButton.clicked.connect(self.update_profile)
+        self.pushButton_3.clicked.connect(self.exploreback)
+
+        # Fetch existing information for the student and populate the UI fields
+        self.fetch_and_display_student_info()
+
+    def exploreback(self,student):
+        self.close()
+        print("existinggggggggggggg11111")
+        self.explore_details = LoggedInWindow(self.student)# pass only research opportunityid
+        self.explore_details.show()
+    
+    def fetch_and_display_student_info(self):
+        try:
+            # Fetch student information from the database based on the student ID
+            print("IT HOULD UPADATEEEEEEEEE")
+            self.db_cursor.execute('''
+                SELECT student_name, major, year_of_graduation, cgpa, skills
+                FROM student
+                WHERE studentid = ?
+            ''', (self.student,))
+
+            # Retrieve the fetched data
+            student_data = self.db_cursor.fetchone()
+            print("students id:",self.student)
+            print(student_data)
+            if student_data:
+                # Populate UI fields with the retrieved data
+                self.lineEdit.setText(str(student_data.student_name))
+                self.comboBox.setCurrentText(str(student_data.major))
+                self.lineEdit_5.setText(str(student_data.year_of_graduation))
+                self.lineEdit_2.setText(str(student_data.cgpa))
+                self.lineEdit_4.setText(str(student_data.skills))
+        except Exception as e:
+            print(f"Error fetching student information: {e}")
+
+    def update_profile(self):
+        try:
+            # Retrieve updated information from UI fields
+            updated_name = self.lineEdit.text()
+            updated_major = self.comboBox.currentText()
+            updated_year_grad = self.lineEdit_5.text()
+            updated_cgpa = self.lineEdit_2.text()
+            updated_skills = self.lineEdit_4.text()
+            if not updated_year_grad.isnumeric() and not updated_cgpa.isnumeric():
+                QtWidgets.QMessageBox.warning(self, 'Invalid entries', 'Please update the cgpa/year to graduate field with numeric values')
+                return
+
+            # Update the student information in the database
+            self.db_cursor.execute('''
+                UPDATE student
+                SET student_name=?, major=?, year_of_graduation=?, cgpa=?, skills=?
+                WHERE studentid=?
+            ''', (updated_name, updated_major, updated_year_grad, updated_cgpa, updated_skills, self.student))
+
+            self.connection.commit()
+            print("Profile updated successfully.")
+            QtWidgets.QMessageBox.information(self, 'Entered', 'Updated')
+        except Exception as e:
+            print(f"Error updating profile: {e}")
+        
+
+
+
+
+class apply_now(QtWidgets.QMainWindow):
+    def __init__(self, research,student, parent=None):
+        super(apply_now, self).__init__(parent)
+        uic.loadUi('student_application.ui', self)  # Load your logged-in UI file
+        self.connection = pyodbc.connect(connection_string)
+        self.db_cursor = self.connection.cursor()
+        self.student = student
+        self.research = research
+# Instance variables to store file paths
+        self.resume_file_path = ""
+        self.cv_file_path = ""
+        print("ResearhcID: ",research)
+
+        # Connect pushButton_4 click event to upload_resume method
+        self.pushButton_4.clicked.connect(lambda: self.upload_resume(student))
+        # Connect pushButton_5 click event to upload_cv method
+        self.pushButton_5.clicked.connect(lambda: self.upload_cv(student))
+        # Connect pushButton_6 click event to save_to_database method
+        self.pushButton_6.clicked.connect(self.save_to_database)
+        self.pushButton_3.clicked.connect(lambda: self.exploreback(student))
+        
+    def exploreback(self,student):
+        self.close()
+        print("existinggggggggggggg11111")
+        self.explore_details = LoggedInWindow(self.student)# pass only research opportunityid
+        self.explore_details.show()
+
+    def upload_resume(self, student):
+        file_dialog = QFileDialog()
+        file_dialog.setNameFilter("PDF Files (*.pdf)")
+        file_dialog.setViewMode(QFileDialog.ViewMode.List)
+        file_path, _ = file_dialog.getOpenFileName(self, "Select PDF File", "", "PDF Files (*.pdf);;All Files (*)")
+
+        if file_path:
+            self.label.setText(f"Selected Resume PDF: {file_path}")
+            self.resume_file_path = file_path
+            self.lineEdit.setText(file_path)
+            self.lineEdit.setReadOnly(True)
+
+    def upload_cv(self, student):
+        file_dialog = QFileDialog()
+        file_dialog.setNameFilter("PDF Files (*.pdf)")
+        file_dialog.setViewMode(QFileDialog.ViewMode.List)
+        file_path, _ = file_dialog.getOpenFileName(self, "Select PDF File", "", "PDF Files (*.pdf);;All Files (*)")
+
+        if file_path:
+            self.label.setText(f"Selected CV PDF: {file_path}")
+            self.cv_file_path = file_path
+            self.lineEdit_2.setText(file_path)
+            self.lineEdit_2.setReadOnly(True)
+
+    def save_to_database(self):
+        try:
+            # Connect to the database (replace connection_string with your actual connection string)
+            connection = pyodbc.connect(connection_string)
+            
+            existing_query = '''
+            SELECT COUNT(*)
+            FROM Applications
+            WHERE StudentID = ? AND ResearchID = ?
+            '''
+            existing_count = self.db_cursor.execute(existing_query, (self.student, self.research)).fetchone()[0]
+
+            if existing_count > 0:
+                QtWidgets.QMessageBox.warning(self, 'Duplicate Application', 'You have already applied to this research opportunity.')
+                return
+            
+            
+            if self.resume_file_path:
+            # Read the content of the resume PDF file
+                with open(self.resume_file_path, 'rb') as resume_file:
+                    resume_content = resume_file.read()
+            else:
+                QtWidgets.QMessageBox.warning(self, 'Invalid pdf entry', 'Please upload resume pdf')
+                return
+            if self.cv_file_path:
+            # Read the content of the CV PDF file
+                with open(self.cv_file_path, 'rb') as cv_file:
+                    cv_content = cv_file.read()
+            else:
+                QtWidgets.QMessageBox.warning(self, 'Invalid pdf entry', 'Please upload cv pdf')
+                return
+            #print("Resume:       ",resume_content)
+            cgpa = self.lineEdit_3.text()
+            essay_personal_statement = self.lineEdit_4.text()
+            if not cgpa or not essay_personal_statement:
+                QtWidgets.QMessageBox.warning(self, 'Missing entries', 'One of the fields entry is missing')
+                return
+            self.db_cursor.execute('''
+                INSERT INTO Applications (StudentID, Resume_File, CV_File, CGPA, Essay_Personal_Statement, ResearchID)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (self.student, resume_content, cv_content, cgpa, essay_personal_statement, self.research))
+
+            self.connection.commit()
+            QtWidgets.QMessageBox.information(self, 'Succesfull entry', 'Your application for the research has been submitted')
+            print("Application saved successfully.")
+            self.db_cursor.close()
+            connection.close()
+            self.close()
+            print("existinggggggggggggg11111")
+            self.explore_details = LoggedInWindow(self.student)# pass only research opportunityid
+            self.explore_details.show()
+            
+
+            print("PDF files uploaded successfully to the database.")
+            
+        except Exception as e:
+            print(f"Error uploading PDF files: {e}")
+
+
+
+
+
+
+
+
+class track_student_application(QtWidgets.QMainWindow):
+    def __init__(self, student,parent=None):
+        super(track_student_application,self).__init__(parent)
+        uic.loadUi('student_applications_tracking.ui', self)  # Load your logged-in UI file
+        self.connection = pyodbc.connect(connection_string)
+
+        self.db_cursor = self.connection.cursor()
+        query = "SELECT ro.research_title_name, f.faculty_name, d.department_name, " \
+            "ro.Status_Application FROM applications a INNER JOIN student S ON A.studentID = S.studentID "\
+                "LEFT OUTER JOIN research_opportunities RO ON RO.researchid = A.researchid LEFT OUTER JOIN " \
+                "faculty f ON f.facultyid = ro.facultyid LEFT OUTER JOIN department d ON d.departmentid = ro.departmentid" \
+                "WHERE s.studentid = "
+        query = query + str(student)
+        print(query)
+        self.student = student
+        self.db_cursor.execute(query)
+        research_opportunities = self.db_cursor.fetchall()
+
+        if not research_opportunities:
+            # If the result is empty, show a popup
+            QtWidgets.QMessageBox.warning(self, "No Applications", "You don't have any applications.")
+            # Clear the table widget
+            self.tableWidget.setRowCount(0)
+            #self.tableWidget.setColumnCount(0)
+        else:
+            print("Here is the query result: ", research_opportunities)
+            # Set the number of rows and columns in the table
+            self.tableWidget.setRowCount(len(research_opportunities))
+            self.tableWidget.setColumnCount(len(research_opportunities[0]))  # take one whole entry and find its length to see the column length
+
+            # Populate the table with data
+            for row_idx, opportunity in enumerate(research_opportunities):
+                for col_idx, value in enumerate(opportunity):
+                    item = QtWidgets.QTableWidgetItem(str(value))
+                    # print(item)
+                    # print('\n')
+                    self.tableWidget.setItem(row_idx, col_idx, item)
+        print("existinggggggggggggg")
+        self.pushButton_6.clicked.connect(lambda: self.exploreback(self.student))
+        
+    def exploreback(self,student):
+        self.close()
+        print("existinggggggggggggg11111")
+        self.explore_details = LoggedInWindow(self.student)# pass only research opportunityid
+        self.explore_details.show()
+    
+        
+    def closeEvent(self, event):
+        # Close the cursor and connection when the UI is closed
+        if hasattr(self, 'cursor') and self.db_cursor is not None:
+            self.db_cursor.close()
+        if hasattr(self, 'connection') and self.connection is not None:
+            self.connection.close()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+class explore_details(QtWidgets.QMainWindow):
+    def __init__(self,detail,student, parent=None):
+        super(explore_details, self).__init__(parent)
+        uic.loadUi('research_detail_for_student.ui', self)  # Load your logged-in UI file
+        print("CHECKK:   ",detail,student)
+        self.connection = pyodbc.connect(connection_string)
+        self.student = student
+        self.db_cursor = self.connection.cursor()
+        
+        query = "select * from research_opportunities RO inner join department D on RO.departmentID = D.departmentID "\
+            "inner join faculty f on f.facultyid = RO.facultyid WHERE RO.ResearchID = "
+        query = query+ detail
+        print(query)
+        print('\n')
+        self.db_cursor.execute(query)
+        research_opportunities = self.db_cursor.fetchall()
+        print(research_opportunities)
+        self.lineEdit.setText(research_opportunities[0][1])
+        self.lineEdit.setReadOnly(True)
+        
+        self.lineEdit_2.setText(research_opportunities[0][18])
+        self.lineEdit_2.setReadOnly(True)
+        
+        self.lineEdit_3.setText(research_opportunities[0][7])
+        self.lineEdit_3.setReadOnly(True)
+        
+        qdate = QDate(research_opportunities[0][8].year, research_opportunities[0][5].month, research_opportunities[0][5].day)
+        self.dateEdit.setDate(qdate)
+        self.dateEdit.setReadOnly(True)
+        
+        qdate = QDate(research_opportunities[0][9].year, research_opportunities[0][5].month, research_opportunities[0][5].day)
+        self.dateEdit_2.setDate(qdate)
+        self.dateEdit_2.setReadOnly(True)
+        
+        self.lineEdit_4.setText(research_opportunities[0][10])
+        self.lineEdit_4.setReadOnly(True)
+        
+        self.lineEdit_5.setText(str(research_opportunities[0][3]))
+        self.lineEdit_5.setReadOnly(True)
+        
+        self.lineEdit_6.setText(str(research_opportunities[0][15]))
+        self.lineEdit_6.setReadOnly(True)
+        
+        self.lineEdit_7.setText(str(research_opportunities[0][11]))
+        self.lineEdit_7.setReadOnly(True)
+        
+        self.pushButton.clicked.connect(lambda: self.exploreback(student))
+        
+    def exploreback(self,student):
+        self.close()
+        self.explore_details = LoggedInWindow(self.student)# pass only research opportunityid
+        self.explore_details.show()
+        
+    def closeEvent(self, event):
+        # Close the cursor and connection when the UI is closed
+        if hasattr(self, 'cursor') and self.db_cursor is not None:
+            self.db_cursor.close()
+        if hasattr(self, 'connection') and self.connection is not None:
+            self.connection.close()
+
+
+
+
+
+
+
+
+
+
+class LoggedInWindow(QtWidgets.QMainWindow):
+    def __init__(self,student, parent=None):
+        super(LoggedInWindow, self).__init__(parent)
+        uic.loadUi('student1.ui', self)  # Load your logged-in UI file
+        print(student)
+        # Connect to the database
+        self.connection = pyodbc.connect(connection_string)
+
+        self.db_cursor = self.connection.cursor()
+        self.tableWidget.clearContents()
+
+        # Fetch research opportunities from the database directly and show as soon as the screen shows up.(its not going to show based on clicking some button it needs to show as soon as this ui load)
+        query = "SELECT RO.ResearchID,RO.Research_Title_Name, F.Faculty_Name, RO.Students_Needed, D.Department_Name, RO.pay, RO.Duration, "\
+                "RO.Deadline FROM Research_Opportunities RO " \
+                "JOIN Faculty F ON RO.FacultyID = F.FacultyID " \
+                "JOIN Department D ON RO.DepartmentID = D.DepartmentID"
+        self.db_cursor.execute(query)
+        research_opportunities = self.db_cursor.fetchall()
+        print(research_opportunities)
+        # Set the number of rows and columns in the table
+        self.tableWidget.setRowCount(len(research_opportunities))
+        self.tableWidget.setColumnCount(len(research_opportunities[0]))# take one whole entry and find its length to see the column length
+
+        # Populate the table with data
+        for row_idx, opportunity in enumerate(research_opportunities):
+            for col_idx, value in enumerate(opportunity):
+                item = QtWidgets.QTableWidgetItem(str(value))
+                #print(item)
+                #print('\n')
+                self.tableWidget.setItem(row_idx, col_idx, item)
+                
+        self.comboBox.currentIndexChanged.connect(self.update_table)
+        self.comboBox_2.currentIndexChanged.connect(self.update_table)
+        self.lineEdit.textChanged.connect(self.update_table)
+        self.pushButton.clicked.connect(lambda: self.tracking(student))
+        self.pushButton_5.clicked.connect(lambda: self.explore_detailz(student))
+        self.pushButton_4.clicked.connect(lambda: self.applynow(student))
+        self.pushButton_2.clicked.connect(lambda: self.profile(student))
+    
+    def profile(self,student):
+        self.close()
+
+        # Open the logged-in window
+        self.apply = profilee(student)
+        self.apply.show()
+    
+    def applynow(self,student):
+        try:
+            detail=[]
+            # Close the current window
+            print("CAMEEEEEEEEEEEEEEEEEEEEE1")
+            for i in range(8):
+                selected_row = self.tableWidget.currentRow()
+                selected_row = self.tableWidget.item(selected_row, i)
+                detail.append(selected_row.text())
+            self.close()
+
+            # Open the logged-in window
+            self.apply = apply_now(detail[0],student)
+            self.apply.show()
+            
+        except Exception as e:
+            print(f"Error opening logged-in window: {e}")
+        
+    def explore_detailz(self,student):
+        try:
+            detail=[]
+            for i in range(8):
+                selected_row = self.tableWidget.currentRow()
+                selected_row = self.tableWidget.item(selected_row, i)
+                detail.append(selected_row.text())
+            self.close()
+            self.explore_details = explore_details(detail[0],student)# pass only research opportunityid
+            self.explore_details.show()
+        except Exception as e:
+            print(f"Error opening logged-in window: {e}")
+            
+    def tracking(self,student):
+        try:
+            # Close the current window
+            self.close()
+
+            # Open the logged-in window
+            self.track_student_application = track_student_application(student)
+            self.track_student_application.show()
+        except Exception as e:
+            print(f"Error opening logged-in window: {e}")
+    
+
+    def update_table(self):
+        flagg=0
+        # Fetch research opportunities from the database
+        query= ""
+        query = "SELECT RO.ResearchID,RO.Research_Title_Name, F.Faculty_Name, RO.Students_Needed, D.Department_Name, RO.pay, RO.Duration, RO.Deadline FROM Research_Opportunities RO " \
+                "JOIN Faculty F ON RO.FacultyID = F.FacultyID " \
+                "JOIN Department D ON RO.DepartmentID = D.DepartmentID"
+
+        # Determine the selected department option
+        dep_option = self.comboBox_2.currentText()
+        if dep_option!="Select department":
+            flagg=1
+            query = query + " WHERE (D.department_name = '" + dep_option + "'"
+        else:
+            flagg=1
+            print("CAME EHREEEEE")
+            query = query + " WHERE (D.department_name in (Select department_name from Department) "
+            
+
+        # Determine the selected sort option
+        
+        
+        # Search functionality
+        search_text = self.lineEdit.text().strip().lower()
+        
+        print(search_text)
+        print('\n')
+        if search_text:
+            if flagg ==1:
+                query = query + " AND (LOWER(RO.Research_Title_Name) LIKE '%" +search_text+"%' OR LOWER(F.Faculty_Name) LIKE '%"+search_text+"%' OR LOWER(D.Department_Name) LIKE '%"+search_text+"%' ))"
+            else:
+                query = query + " WHERE (LOWER(RO.Research_Title_Name) LIKE '%" +search_text+"%' OR LOWER(F.Faculty_Name) LIKE '%"+search_text+"%' OR LOWER(D.Department_Name) LIKE '%"+search_text+"%' ))"
+
+            print('\n')
+            print(query)
+        else:
+            query = query+')'
+        print('\n')
+        sort_option = self.comboBox.currentText()
+        if sort_option!="Sort by":
+            if sort_option == "pay low to high":
+                query += " ORDER BY RO.Pay ASC"
+            elif sort_option == "recent deadlines":
+                query += " ORDER BY RO.Deadline ASC"
+        
+        print(query)
+        self.db_cursor.execute(query)
+        
+        # Execute the final query
+       
+        research_opportunities = self.db_cursor.fetchall()
+        
+        if research_opportunities:
+            self.display_opportunities(research_opportunities)
+        else:
+            self.tableWidget.setRowCount(0)
+
+
+    def display_opportunities(self, research_opportunities):
+        # Set the number of rows and columns in the table
+        self.tableWidget.setRowCount(len(research_opportunities))
+        self.tableWidget.setColumnCount(len(research_opportunities[0]))
+
+        # Populate the table with data
+        for row_idx, opportunity in enumerate(research_opportunities):
+            for col_idx, value in enumerate(opportunity):
+                item = QtWidgets.QTableWidgetItem(str(value))
+                self.tableWidget.setItem(row_idx, col_idx, item)
+    def closeEvent(self, event):
+        # Close the cursor and connection when the UI is closed
+        if hasattr(self, 'cursor') and self.db_cursor is not None:
+            self.db_cursor.close()
+        if hasattr(self, 'connection') and self.connection is not None:
+            self.connection.close()
+
+
+
+
+
+
+
+
+
+
+
+
+class MyMainWindow(QtWidgets.QMainWindow):
+    def __init__(self):
+        super(MyMainWindow, self).__init__()
+        uic.loadUi('mainscreen.ui', self)  # Load your .ui file
+
+        # Connect to the database
+        self.connection = pyodbc.connect(connection_string)
+
+        self.db_cursor = self.connection.cursor()
+
+
+        # Connect the button click to the register_user method
+        self.pushButton.clicked.connect(self.register_user)
+        self.pushButton_2.clicked.connect(self.login_user)
+        
+    def login_user(self):
+        huemail = self.lineEdit.text()
+        hupasswordd = self.lineEdit_2.text()
+        if "@st.habib.edu.pk" not in huemail:
+            QtWidgets.QMessageBox.warning(self, 'Invalid Email', 'Please use a valid HU student email.')
+            return
+        try:
+            # Check if the user already exists in the database
+            self.db_cursor.execute("SELECT * FROM student WHERE HU_Email_ID = ?", (huemail,))
+            existing_user = self.db_cursor.fetchone()
+            print(existing_user)
+            print('\n')
+
+            if existing_user:
+                #QtWidgets.QMessageBox.warning(self, 'User Exists', 'You are found in our database')
+                #You need to check now that their password matches
+                self.db_cursor.execute("SELECT hupassword FROM student WHERE HU_Email_ID = ?", (huemail,))
+                existing_user_password = self.db_cursor.fetchone()
+                print("Existing password:", existing_user_password[0], "Entered password:", hupasswordd)
+
+                if existing_user_password[0] == hupasswordd: #if they enetered correct password
+                    query= "select * FROM Student where hu_email_id = '"
+                    query = query + huemail + "'"
+                    self.db_cursor.execute(query)
+                    executed = self.db_cursor.fetchone()
+                    self.studentid =executed[0]
+                    #print(executed[0])
+                    self.open_logged_in_window(self.studentid)  # Open the new window and pass the student if who logged in
+                else:
+                    QtWidgets.QMessageBox.information(self, 'Password Authentication Errow', 'Enter correct password')
+            else:
+                
+                QtWidgets.QMessageBox.information(self, 'Error', 'You need to register before logging in')
+
+        except Error as e:
+            QtWidgets.QMessageBox.critical(self, 'Error', f'Could not register user: {e}')
+
+
+    def register_user(self):
+        huemail = self.lineEdit.text()
+        hupasswordd = self.lineEdit_2.text()
+        #print("pass ",hupasswordd)
+        # Check if the email is in the correct format
+        if "@st.habib.edu.pk" not in huemail:
+            QtWidgets.QMessageBox.warning(self, 'Invalid Email', 'Please use a valid HU student email.')
+            return
+        if hupasswordd == "": #if user dont enter password
+            QtWidgets.QMessageBox.warning(self, 'Invalid Password', 'Please enter valid password.')
+            return
+
+        try:
+            # Check if the user already exists in the database
+            self.db_cursor.execute("SELECT * FROM student WHERE HU_Email_ID = ?", (huemail,))
+            existing_user = self.db_cursor.fetchone()
+            print(existing_user)
+            print('\n')
+
+            if existing_user:
+                QtWidgets.QMessageBox.warning(self, 'User Exists', 'User already registered. Please log in.')
+            else:
+                print("insertingggggggggggg")
+                # If not, register the user in the database
+                sql_query ="INSERT INTO student ([HU_Email_ID], [HUPassword]) VALUES (?, ?);"
+                # Execute the SQL query with parameter values
+                self.db_cursor.execute(sql_query, (huemail, hupasswordd))
+                self.connection.commit()
+                
+
+                QtWidgets.QMessageBox.information(self, 'Success', 'User registered successfully.')
+
+        except Error as e:
+            QtWidgets.QMessageBox.critical(self, 'Error', f'Could not register user: {e}')
+
+    def open_logged_in_window(self,studentid):
+        try:
+            # Close the current window
+            self.close()
+
+            # Open the logged-in window
+            self.logged_in_window = LoggedInWindow(self.studentid)
+            self.logged_in_window.show()
+        except Exception as e:
+            print(f"Error opening logged-in window: {e}")
+            
+
+    def closeEvent(self, event):
+        # Close the cursor and connection when the UI is closed
+        if hasattr(self, 'cursor') and self.db_cursor is not None:
+            self.db_cursor.close()
+        if hasattr(self, 'connection') and self.connection is not None:
+            self.connection.close()
+
+if __name__ == '__main__':
+    app = QtWidgets.QApplication(sys.argv)
+    mainWin = MyMainWindow()
+    mainWin.show()
+    sys.exit(app.exec())
